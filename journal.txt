@@ -1,0 +1,476 @@
+LYRA TRAINING SETUP JOURNAL
+===========================
+Date: 2025-10-25
+Location: /home/mva69/NVProject/lyra
+Cluster: Alliance Canada (Compute Canada)
+
+===========================
+SESSION TRANSCRIPT
+===========================
+
+[USER REQUEST #1]
+"I want to train the model in this repo, on this machine. How would I do that? https://github.com/nv-tlabs/lyra"
+
+[ASSISTANT ACTION]
+- Checked current directory (empty)
+- Fetched information from GitHub repository: https://github.com/nv-tlabs/lyra
+- Fetched INSTALL.md documentation
+- Provided comprehensive setup steps:
+  1. Clone repository
+  2. Create conda environment
+  3. Install dependencies
+  4. Download training data
+  5. Configure data paths
+  6. Run training
+
+[USER REQUEST #2]
+"do everything other than step 7, run training"
+
+[ASSISTANT ACTION]
+- Created TODO list with 8 tasks
+- Started Step 1: Clone repository
+  * Command: git clone https://github.com/nv-tlabs/lyra.git
+  * Status: SUCCESS - Repository cloned successfully
+
+- Attempted Step 2: Create conda environment
+  * Command: conda env create --file lyra.yaml
+  * Status: FAILED - conda command not found
+
+[ASSISTANT ACTION]
+- Checked for conda installation
+  * Searched standard locations (~/miniconda*, ~/anaconda*)
+  * Result: Conda not found
+
+- Checked for conda in module system
+  * Command: module avail miniconda
+  * Command: module spider anaconda
+  * Result: No conda modules available
+
+- Attempted to install Miniconda
+  * Command: wget Miniconda installer
+  * Status: USER INTERRUPTED
+
+[USER INTERVENTION #1]
+User provided Alliance Canada documentation explaining:
+- DO NOT install Anaconda/Conda on Alliance clusters
+- Reasons: file quota issues, non-optimized binaries, conflicts
+- Recommended alternatives: virtualenv or Apptainer containers
+
+[ASSISTANT ACTION]
+- Updated approach based on cluster policy
+- Read Lyra requirements files:
+  * lyra.yaml - requires Python 3.10, GCC 12, CUDA 12.4
+  * requirements_gen3c.txt - 36 Python packages
+  * requirements_lyra.txt - 12 packages including custom git repos
+
+- Checked available cluster modules:
+  * Python 3.10.13 - AVAILABLE
+  * CUDA 12.6 - AVAILABLE (close to required 12.4)
+  * GCC 12.3 - AVAILABLE (close to required 12.4)
+
+- Loaded cluster modules:
+  * Command: module load python/3.10.13 cuda/12.6 gcc/12.3
+  * Status: SUCCESS
+
+- Created Python virtual environment:
+  * Command: python -m venv lyra_env
+  * Status: USER INTERRUPTED (user asked for explanation)
+
+[USER QUESTION #1]
+"what is this module command you keep running"
+
+[ASSISTANT RESPONSE]
+Explained Environment Modules system:
+- Manages software environments on HPC clusters
+- Modifies PATH, LD_LIBRARY_PATH, etc.
+- Common commands: module avail, module load, module list
+- Benefits: pre-installed, optimized software without needing Conda
+
+[USER REQUEST #3]
+"ok carry on"
+
+[ASSISTANT ACTION]
+- Loaded modules successfully
+- Created virtual environment: lyra_env
+- Upgraded pip, setuptools, wheel
+- Attempted to install requirements_gen3c.txt
+  * Status: FAILED - warp-lang==1.7.2 not available
+  * Available versions: 1.6.2, 1.10.0.dev*
+  * Issue: Exact version not in cluster's wheelhouse
+
+- Attempted workaround: Install packages individually, skip warp-lang
+  * Status: USER INTERRUPTED
+
+[USER QUESTION #2]
+"what exactly are you doing and why"
+
+[ASSISTANT RESPONSE]
+Explained:
+- Version compatibility issue with warp-lang
+- Attempted to install other packages and use compatible version
+- Problem: Lyra requires exact versions not in cluster repository
+- Installing from PyPI would compile from source, use more quota
+
+[ASSISTANT SUGGESTION]
+Recommended switching to Apptainer approach:
+- Better for complex dependencies
+- Complete environment control
+- Matches Alliance recommendations for complex cases
+
+[USER REQUEST #4]
+"yes use apptainer"
+
+[ASSISTANT ACTION]
+- Updated TODO list for Apptainer approach
+- Checked for Apptainer availability:
+  * Command: which apptainer
+  * Result: Not in PATH
+
+- Searched for Apptainer module:
+  * Command: module spider apptainer
+  * Status: USER INTERRUPTED
+
+[USER QUESTION #3]
+"what does module spider do"
+
+[ASSISTANT RESPONSE]
+Explained module spider:
+- Searches ALL available modules (not just currently loadable)
+- Shows prerequisites needed to load a module
+- Different from 'module avail' which shows only currently accessible modules
+
+[USER REQUEST #5]
+"continue"
+
+[ASSISTANT ACTION]
+- Ran module spider apptainer
+  * Result: Found apptainer/1.2.4, 1.3.4, 1.3.5
+- Loaded Apptainer module:
+  * Command: module load apptainer/1.3.5
+  * Verified: apptainer version 1.3.5
+
+- Started creating Apptainer definition file (lyra.def)
+  * Status: USER INTERRUPTED
+
+[USER QUESTION #4]
+"what exactly are you doing right now"
+
+[ASSISTANT RESPONSE]
+Explained Apptainer definition file:
+- Blueprint/recipe for building container
+- Defines base image (NVIDIA CUDA 12.4.1)
+- Installs system dependencies (GCC 12, Python 3.10, etc.)
+- Sets environment variables
+- Next steps: build container, install Python packages, run training
+
+[USER REQUEST #6]
+"yes create the definition file, but give me a chance to ask questions before continuing"
+
+[ASSISTANT ACTION]
+- Created file: /home/mva69/NVProject/lyra/lyra.def
+  * Base: nvidia/cuda:12.4.1-devel-ubuntu22.04
+  * Installs: GCC 12, Python 3.10, cmake, ninja, git, build tools
+  * Sets up: CUDA_HOME, PATH, LD_LIBRARY_PATH, PYTHONPATH
+  * Creates: /workspace directory
+
+- Explained next steps:
+  1. Build container image (~10-30 min, ~5GB)
+  2. Shell into container
+  3. Install Python requirements
+  4. Download training data
+  5. Configure data paths
+
+[USER QUESTION #5]
+"do I have to build the container image on the cluster machine? Could I instead build it on my laptop?"
+
+[ASSISTANT RESPONSE]
+Presented three options:
+
+Option 1: Build on laptop (x86_64), transfer to cluster
+- Pros: No cluster resources, no wait times
+- Cons: Need Apptainer, large file transfer, won't work on ARM
+
+Option 2: Build Docker image, convert to Apptainer
+- Pros: Docker easier on Mac/Windows, can use Docker Hub
+- Cons: Extra conversion step
+
+Option 3: Build on cluster
+- Pros: Guaranteed compatibility, no transfer
+- Cons: Uses cluster resources
+
+Recommendation: Build on laptop if x86_64 Linux/WSL2
+
+[USER REQUEST #7]
+"are there any advantages to building it on my laptop versus on the cluster? Search around the wiki for more information https://docs.alliancecan.ca/wiki/Technical_documentation"
+
+[ASSISTANT ACTION]
+- Fetched: https://docs.alliancecan.ca/wiki/Apptainer
+- Fetched: https://docs.alliancecan.ca/wiki/Building_Singularity_images (404)
+
+[KEY FINDINGS FROM ALLIANCE DOCUMENTATION]
+Building on cluster is PROBLEMATIC:
+- Requires root permissions (not available to users)
+- Cannot build on Lustre/GPFS filesystems (cluster uses these)
+- Creates thousands of files consuming quota
+- Some containers cannot be built without root
+
+Building locally is RECOMMENDED:
+- Install Linux VM with sudo access
+- Build there, transfer .sif file
+- Only 1 file counts against quota
+- Full control over build process
+
+[USER REQUEST #8]
+"yes I do. please write a document in which you describe exactly what needs to be done on the laptop, why, and the requirements for the laptop itself to do what needs to be done"
+
+[ASSISTANT ACTION]
+- Started creating comprehensive documentation
+  * Status: USER INTERRUPTED
+
+[USER REQUEST #9]
+"also include the entire lyra.def file in this document"
+
+[ASSISTANT ACTION]
+- Read lyra.def file contents
+- Created comprehensive documentation file:
+  * File: /home/mva69/NVProject/lyra/BUILD_CONTAINER_LOCALLY.md
+  * Sections:
+    1. Why Build Locally
+    2. Laptop Requirements
+    3. Container Definition File (complete lyra.def included)
+    4. Installation Steps
+    5. Building the Container
+    6. Transferring to Cluster
+    7. Using the Container on Cluster
+    8. Troubleshooting
+    9. Summary Checklist
+
+[USER REQUEST #10]
+"write everything you did so far, including the prompts I gave you, to a file journal.txt"
+
+[ASSISTANT ACTION]
+- Creating this journal file
+
+===========================
+FILES CREATED
+===========================
+
+1. /home/mva69/NVProject/lyra/lyra.def
+   - Apptainer container definition file
+   - Base: NVIDIA CUDA 12.4.1 on Ubuntu 22.04
+   - Includes: GCC 12, Python 3.10, build tools
+
+2. /home/mva69/NVProject/lyra/BUILD_CONTAINER_LOCALLY.md
+   - Comprehensive guide for building container on laptop
+   - Includes complete lyra.def file
+   - Step-by-step instructions
+   - Troubleshooting guide
+
+3. /home/mva69/NVProject/lyra/journal.txt
+   - This file
+   - Complete session transcript
+
+===========================
+DIRECTORIES CREATED
+===========================
+
+1. /home/mva69/NVProject/lyra/lyra/
+   - Cloned from https://github.com/nv-tlabs/lyra
+   - Contains: source code, configs, scripts, requirements
+
+2. /home/mva69/NVProject/lyra/lyra_env/
+   - Python virtual environment (NOT USED - switched to Apptainer)
+   - Status: Created but abandoned in favor of Apptainer approach
+
+===========================
+KEY DECISIONS MADE
+===========================
+
+1. REJECTED: Conda/Anaconda installation
+   - Reason: Against Alliance cluster policy
+   - Issues: File quota, non-optimized binaries, conflicts
+
+2. ATTEMPTED: Python virtualenv with cluster modules
+   - Reason: Alliance recommended approach
+   - Result: FAILED due to exact package version requirements
+   - Issue: warp-lang==1.7.2 not available in cluster wheelhouse
+
+3. SELECTED: Apptainer container approach
+   - Reason: Complex dependencies, exact version requirements
+   - Benefits: Full control, isolated environment, reproducible
+   - Recommended by Alliance for complex cases
+
+4. DECIDED: Build container on laptop, not cluster
+   - Reason: Alliance documentation strongly recommends this
+   - Issues with cluster build: no root, filesystem incompatibility, quota
+   - Benefits of local build: full control, quota-friendly
+
+===========================
+CLUSTER MODULES LOADED
+===========================
+
+- python/3.10.13
+- cuda/12.6
+- gcc/12.3
+- apptainer/1.3.5
+- Plus dependencies: openmpi, ucx, nccl, etc.
+
+===========================
+REQUIREMENTS ANALYSIS
+===========================
+
+From lyra.yaml (Conda requirements):
+- python=3.10
+- pip=25.0
+- cmake, ninja
+- gcc=12.4.0, gxx=12.4.0
+- cuda=12.4, cuda-nvcc=12.4, cuda-toolkit=12.4
+
+From requirements_gen3c.txt (36 packages):
+- attrs==25.1.0
+- better-profanity==0.7.0
+- boto3==1.35.99
+- decord==0.6.0
+- diffusers==0.32.2
+- einops==0.8.1
+- huggingface-hub==0.29.2
+- hydra-core==1.3.2
+- imageio[pyav,ffmpeg]==2.37.0
+- iopath==0.1.10
+- ipdb==0.13.13
+- loguru==0.7.2
+- mediapy==1.2.2
+- megatron-core==0.10.0
+- nltk==3.9.1
+- numpy==1.26.4
+- nvidia-ml-py==12.535.133
+- omegaconf==2.3.0
+- opencv-python==4.10.0.84
+- pandas==2.2.3
+- peft==0.14.0
+- pillow==11.1.0
+- protobuf==4.25.3
+- pynvml==12.0.0
+- pyyaml==6.0.2
+- retinaface-py==0.0.2
+- safetensors==0.5.3
+- scikit-image==0.24.0
+- sentencepiece==0.2.0
+- setuptools==76.0.0
+- termcolor==2.5.0
+- torch==2.6.0
+- torchvision==0.21.0
+- tqdm==4.66.5
+- transformers==4.49.0
+- warp-lang==1.7.2  **PROBLEMATIC - not available on cluster**
+
+From requirements_lyra.txt (12 packages):
+- flash_attn==2.7.4.post1
+- timm==1.0.19
+- kiui==0.2.17
+- lru-dict==1.3.0
+- git+https://github.com/Dao-AILab/causal-conv1d@v1.4.0
+- git+https://github.com/nerfstudio-project/gsplat.git@73fad53c31ec4d6b088470715a63f432990493de
+- git+https://github.com/rahul-goel/fused-ssim/@8bdb59feb7b9a41b1fab625907cb21f5417deaac
+- mpi4py==4.1.0
+- plyfile==1.1.2
+- deepspeed==0.17.5
+- accelerate==1.10.0
+- openexr==3.2.3
+
+Additional specialized libraries needed (from INSTALL.md):
+- transformer-engine[pytorch]==1.12.0
+- NVIDIA apex (from source with CUDA extensions)
+- MoGe (from GitHub)
+- Mamba v2.2.4 (from GitHub)
+
+===========================
+CURRENT STATUS
+===========================
+
+COMPLETED:
+✓ Repository cloned
+✓ Requirements analyzed
+✓ Cluster modules identified and loaded
+✓ Apptainer available and loaded
+✓ Container definition file created (lyra.def)
+✓ Documentation created (BUILD_CONTAINER_LOCALLY.md)
+✓ Session journal created (journal.txt)
+
+PENDING (to be done on laptop):
+- Install Apptainer on laptop
+- Build container: sudo -E apptainer build lyra.sif lyra.def
+- Verify container build
+- Transfer lyra.sif to cluster
+
+PENDING (to be done on cluster after container transfer):
+- Test container with GPU: apptainer exec --nv lyra.sif nvidia-smi
+- Create overlay for persistent Python packages
+- Install Python requirements inside container
+- Download training data from Hugging Face:
+  * huggingface-cli download nvidia/PhysicalAI-SpatialIntelligence-Lyra-SDG \
+    --repo-type dataset --local-dir lyra_dataset/tar
+- Configure data paths in src/models/data/registry.py
+- Run test_environment.py to verify setup
+- Ready for training with: bash train.sh
+
+===========================
+IMPORTANT NOTES
+===========================
+
+1. DO NOT build container on cluster - build on laptop
+2. Alliance cluster uses Lustre/GPFS - incompatible with container builds
+3. Container approach chosen due to exact version requirements
+4. warp-lang==1.7.2 not available in cluster wheelhouse (only 1.6.2, 1.10.0.dev)
+5. GPU not needed on laptop for building, only for running on cluster
+6. Final .sif file will be ~5-10GB
+7. Use --nv flag when running container to enable GPU support
+8. Use --bind to mount cluster directories into container
+9. Python packages can be installed in overlay for persistence
+
+===========================
+NEXT STEPS FOR USER
+===========================
+
+1. Review BUILD_CONTAINER_LOCALLY.md document
+2. On laptop:
+   - Verify architecture: uname -m (should be x86_64)
+   - Install Apptainer 1.3.5
+   - Build container using provided lyra.def
+   - Test container locally
+   - Transfer to cluster
+
+3. On cluster (after transfer):
+   - Load apptainer module
+   - Test container
+   - Set up bind mounts and overlay
+   - Install Python packages
+   - Download training data
+   - Configure data paths
+   - Run training
+
+===========================
+COMMANDS REFERENCE
+===========================
+
+On Laptop:
+  sudo -E apptainer build lyra.sif lyra.def
+  apptainer exec lyra.sif python --version
+  gzip lyra.sif
+  scp lyra.sif.gz username@cluster:/home/username/NVProject/lyra/
+
+On Cluster:
+  module load apptainer/1.3.5
+  gunzip lyra.sif.gz
+  apptainer exec --nv lyra.sif nvidia-smi
+  apptainer shell --nv --bind /home/username/NVProject/lyra:/workspace lyra.sif
+
+Inside Container:
+  cd /workspace
+  pip install -r requirements_gen3c.txt
+  pip install -r requirements_lyra.txt
+  [install specialized libraries as documented]
+
+===========================
+END OF JOURNAL
+===========================
