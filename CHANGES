@@ -1,0 +1,3 @@
+Add some "journal" files cataloging the use of claude with compute canada resources to set up an apptainer for lyra
+Add other additional files/make config changes to set up a minimal training pipeline for lyra
+
