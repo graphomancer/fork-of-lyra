@@ -1,0 +1,180 @@
+Bootstrap: docker
+From: nvidia/cuda:12.4.0-devel-ubuntu22.04
+
+%post
+    # Set environment variables
+    export DEBIAN_FRONTEND=noninteractive
+    export PATH=/opt/conda/bin:$PATH
+
+    # Update and install system dependencies
+    apt-get update && apt-get install -y \
+        wget \
+        git \
+        build-essential \
+        vim \
+        curl \
+        ca-certificates \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Install Miniconda
+    cd /tmp
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+    bash miniconda.sh -b -p /opt/conda
+    rm miniconda.sh
+
+    # Initialize conda
+    /opt/conda/bin/conda init bash
+    . /opt/conda/etc/profile.d/conda.sh
+
+    # Update conda (skipped to avoid TOS requirement)
+    # conda update -n base -c defaults conda -y
+
+    # Create workspace directory
+    mkdir -p /workspace
+    cd /workspace
+
+    # Clone Lyra repository (for getting lyra.yaml and requirements files)
+    git clone https://github.com/nv-tlabs/lyra.git
+    cd lyra
+
+    # Pre-accept Anaconda repository Terms of Service so non-interactive builds succeed
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
+    # Create conda environment from lyra.yaml
+    # This installs: python=3.10, pip=25.0, cmake, ninja, gcc=12.4.0, gxx=12.4.0,
+    # cuda=12.4, cuda-nvcc=12.4, cuda-toolkit=12.4
+    conda env create --file lyra.yaml --yes
+
+    # Activate the lyra environment
+    conda activate lyra
+
+    # Copy system CUDA headers into conda environment
+    # The base image has complete CUDA 12.4.0, conda's CUDA package may be incomplete
+    echo "Copying CUDA headers from system to conda environment..."
+    mkdir -p $CONDA_PREFIX/include
+    cp -r /usr/local/cuda/include/* $CONDA_PREFIX/include/ 2>/dev/null || true
+
+    # Also ensure CUDA libraries are available
+    mkdir -p $CONDA_PREFIX/lib
+    if [ -d /usr/local/cuda/lib64 ]; then
+        # Create symlinks for shared libraries (not copying to save space)
+        for lib in /usr/local/cuda/lib64/*.so*; do
+            if [ -f "$lib" ]; then
+                ln -sf "$lib" $CONDA_PREFIX/lib/$(basename "$lib") 2>/dev/null || true
+            fi
+        done
+    fi
+
+    # Ensure CUDA arch list is defined so PyTorch extensions compile during image build
+    export TORCH_CUDA_ARCH_LIST="8.0;8.6;9.0"
+
+    # Set CUDA_HOME to conda prefix as per INSTALL.md requirements
+    export CUDA_HOME=$CONDA_PREFIX
+
+    # Add explicit compiler and linker flags for CUDA
+    export CXXFLAGS="-I$CONDA_PREFIX/include ${CXXFLAGS:-}"
+    export CFLAGS="-I$CONDA_PREFIX/include ${CFLAGS:-}"
+    export LDFLAGS="-L$CONDA_PREFIX/lib -L/usr/local/cuda/lib64 ${LDFLAGS:-}"
+    export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
+
+    # Install Python requirements from requirements_gen3c.txt
+    pip install -r requirements_gen3c.txt
+
+    # Install Python requirements from requirements_lyra.txt
+    pip install -r requirements_lyra.txt
+
+    # Patch Transformer engine linking issues in conda environments (exact command from INSTALL.md)
+    # Note: Using a loop to handle both files and directories properly
+    for item in $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/*; do
+        if [ -e "$item" ]; then
+            basename=$(basename "$item")
+            # Remove existing target if it exists (whether file or directory)
+            rm -rf "$CONDA_PREFIX/include/$basename"
+            rm -rf "$CONDA_PREFIX/include/python3.10/$basename"
+            # Create symlinks
+            ln -sf "$item" "$CONDA_PREFIX/include/$basename"
+            ln -sf "$item" "$CONDA_PREFIX/include/python3.10/$basename"
+        fi
+    done
+
+    # Install Transformer engine
+    pip install transformer-engine[pytorch]==1.12.0
+
+    # Install NVIDIA Apex with CUDA extensions
+    cd /workspace
+    git clone https://github.com/NVIDIA/apex
+    cd apex
+    CUDA_HOME=$CONDA_PREFIX pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation \
+        --config-settings "--build-option=--cpp_ext" \
+        --config-settings "--build-option=--cuda_ext" ./
+
+    # Install MoGe
+    pip install git+https://github.com/microsoft/MoGe.git
+
+    # Install Mamba v2.2.4
+    pip install --no-build-isolation "git+https://github.com/state-spaces/mamba@v2.2.4"
+
+    # Clean up to reduce image size
+    conda clean -a -y
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+    rm -rf /workspace/apex/.git
+    rm -rf /workspace/lyra/.git
+
+%environment
+    export PATH=/opt/conda/envs/lyra/bin:/opt/conda/bin:$PATH
+    export CUDA_HOME=/opt/conda/envs/lyra
+    export LD_LIBRARY_PATH=/opt/conda/envs/lyra/lib:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    export TORCH_CUDA_ARCH_LIST="8.0;8.6;9.0"
+    export PYTHONPATH=/workspace:$PYTHONPATH
+    export CXXFLAGS="-I/opt/conda/envs/lyra/include"
+    export CFLAGS="-I/opt/conda/envs/lyra/include"
+
+%runscript
+    #!/bin/bash
+    source /opt/conda/etc/profile.d/conda.sh
+    conda activate lyra
+    echo "======================================"
+    echo "Lyra Training Container"
+    echo "======================================"
+    echo "Python version: $(python --version)"
+    echo "CUDA version: $(nvcc --version | grep release)"
+    echo "GCC version: $(gcc --version | head -n1)"
+    echo "Conda environment: lyra"
+    echo "CUDA_HOME: $CUDA_HOME"
+    echo "======================================"
+    exec /bin/bash "$@"
+
+%startscript
+    #!/bin/bash
+    source /opt/conda/etc/profile.d/conda.sh
+    conda activate lyra
+
+%labels
+    Author Lyra Setup - Corrected Version
+    Version v2.0
+    Description Apptainer container for NVIDIA Lyra training with Miniconda
+    CUDA 12.4.0
+    Python 3.10
+    GCC 12.4.0
+
+%help
+    This container provides a complete environment for NVIDIA Lyra training.
+
+    It includes:
+    - Miniconda with lyra conda environment
+    - CUDA 12.4.0
+    - Python 3.10
+    - GCC 12.4.0
+    - All Lyra dependencies pre-installed per official INSTALL.md
+
+    Usage on cluster:
+
+    # Interactive shell with GPU
+    apptainer shell --nv --bind /path/to/data:/data lyra_correct.sif
+
+    # Run training script
+    apptainer exec --nv --bind /path/to/data:/data lyra_correct.sif bash train.sh
+
+    Inside the container, the conda environment 'lyra' is automatically activated.
