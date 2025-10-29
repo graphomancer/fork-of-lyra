@@ -8,5 +8,5 @@ batch_size: 1
 static_view_indices_sampling: random_bucket
 static_frame_sampling: exponential
 lpips_chunk_size: 1
-checkpointing_steps: 50
-max_train_steps: 82000
+checkpointing_steps: 2
+max_train_steps: 2

@@ -15,5 +15,5 @@ gaussians_random_ratio: 0.0
 # use flipped supervision
 select_target_views_input_dynamic: false
 use_time_embedding: true
-checkpointing_steps: 50
-max_train_steps: 91000
+checkpointing_steps: 2
+max_train_steps: 2

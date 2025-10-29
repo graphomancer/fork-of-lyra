@@ -30,9 +30,9 @@ dataset_registry['default'] = {
 # Training static
 
 dataset_registry['lyra_static'] = {
-    'cls': RadymWrapper, 
+    'cls': RadymWrapper,
     'kwargs': {
-        "root_path": "/path/to/static",
+        "root_path": "assets/demo/static/diffusion_output",
         "is_static": True,
         "is_multi_view": True,
         "has_latents": True,
@@ -48,9 +48,9 @@ dataset_registry['lyra_static'] = {
 # Training dynamic
 
 dataset_registry['lyra_dynamic'] = {
-    'cls': RadymWrapper, 
+    'cls': RadymWrapper,
     'kwargs': {
-        "root_path": "/path/to/dynamic",
+        "root_path": "assets/demo/dynamic/diffusion_output",
         "is_static": False,
         "is_multi_view": True,
         "has_latents": True,

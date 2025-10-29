@@ -7,4 +7,5 @@ num_input_multi_views: 1
 batch_size: 1
 lpips_chunk_size: 1
 load_latents: False
-max_train_steps: 17500
+checkpointing_steps: 2
+max_train_steps: 2

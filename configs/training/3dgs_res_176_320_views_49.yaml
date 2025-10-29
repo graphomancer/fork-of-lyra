@@ -6,4 +6,5 @@ gs_view_chunk_size: 1
 num_input_multi_views: 1
 batch_size: 4
 load_latents: False
-max_train_steps: 12500
+checkpointing_steps: 2
+max_train_steps: 2
