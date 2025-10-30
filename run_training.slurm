@@ -16,9 +16,18 @@ module load apptainer/1.3.5
 cd /home/mva69/NVProject/lyra
 
 # Unset problematic environment variables before running container
-unset LD_PRELOAD
+#unset LD_PRELOAD
+
+#APPTAINERENV_LD_LIBRARY_PATH=/opt/conda/envs/lyra/lib:/usr/local/cuda/lib64 \
+#SINGULARITYENV_LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/lib/x86_64-linux-gnu \
+
+#apptainer exec --nv \
+#    --bind $(pwd):/workspace \
+#    container/lyra_fixed.sif \
+#    bash -c "export LD_LIBRARY_PATH=/opt/conda/envs/lyra/lib:/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && cd /workspace && bash train.sh"
 
 apptainer exec --nv \
     --bind $(pwd):/workspace \
-    container/lyra.sif \
-    bash -c "export LD_LIBRARY_PATH=/opt/conda/envs/lyra/lib:/usr/local/cuda/lib64:\$LD_LIBRARY_PATH && cd /workspace && bash train.sh"
+    --env TORCH_HOME=/workspace/pretrained_models/torch_hub \
+    container/lyra_ubuntu24.sif \
+    bash -c "cd /workspace && bash train.sh"
