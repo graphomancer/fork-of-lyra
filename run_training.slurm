@@ -3,7 +3,7 @@
 #SBATCH --partition=gpupreempt
 #SBATCH --time=2:00:00
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --output=logs/train_%j.out
